@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gosnap/registry"
+
+	"github.com/ecwid/gosnap/registry"
 )
 
 var KeyToApproveUrl = func(key string) string {

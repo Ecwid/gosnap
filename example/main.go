@@ -1,12 +1,13 @@
 package main
 
 import (
-	"gosnap"
-	"gosnap/registry/s3"
 	"image"
 	"image/png"
 	"net/http"
 	"os"
+
+	"github.com/ecwid/gosnap"
+	"github.com/ecwid/gosnap/registry/s3"
 )
 
 func saveImg(img image.Image, name string) error {

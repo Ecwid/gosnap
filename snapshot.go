@@ -2,10 +2,11 @@ package gosnap
 
 import (
 	"errors"
-	"gosnap/registry"
 	"image"
 	"sort"
 	"time"
+
+	"github.com/ecwid/gosnap/registry"
 )
 
 const (

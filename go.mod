@@ -1,4 +1,4 @@
-module gosnap
+module github.com/ecwid/gosnap
 
 go 1.21.0
 

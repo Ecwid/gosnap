@@ -3,7 +3,6 @@ package s3
 import (
 	"bytes"
 	"fmt"
-	"gosnap/registry"
 	"io"
 	"net/http"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/ecwid/gosnap/registry"
 )
 
 const (

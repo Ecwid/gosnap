@@ -2,12 +2,12 @@ package gosnap
 
 import (
 	"errors"
-	"gosnap/registry"
 	"image"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ecwid/gosnap/registry"
 	"github.com/google/uuid"
 )
 

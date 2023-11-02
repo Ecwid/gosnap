@@ -2,8 +2,9 @@ package gosnap
 
 import (
 	"errors"
-	"gosnap/registry"
 	"image"
+
+	"github.com/ecwid/gosnap/registry"
 )
 
 var ErrBaselinePublished = errors.New("published now (baseline was not found)")
