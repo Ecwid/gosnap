@@ -56,6 +56,20 @@ func decodePng(body []byte) (image.Image, error) {
 	return png.Decode(bytes.NewReader(body))
 }
 
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func difference(a, b image.Image) image.Image {
 	var (
 		ab   = a.Bounds()

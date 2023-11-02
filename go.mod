@@ -1,6 +1,6 @@
 module github.com/ecwid/gosnap
 
-go 1.21.0
+go 1.20
 
 require (
 	github.com/aws/aws-sdk-go v1.45.26 // indirect
