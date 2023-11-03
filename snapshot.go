@@ -10,27 +10,21 @@ import (
 )
 
 const (
-	dataHash     = "Dhash"
-	dataVersion  = "Version"
-	dataMetadata = "Data"
+	dataHash = "Dhash"
 )
 
 type Snapshot struct {
-	Last    time.Time
-	Version string
-	Hash    Hash
-	Value   image.Image
+	Value    image.Image
+	Hash     Hash
+	Metadata map[string]string
 }
 
-func (s *Snapshot) Decode(obj registry.Object) error {
-	*s = Snapshot{
-		Last:    obj.Last,
-		Hash:    hashString(obj.Data[dataHash]),
-		Version: obj.Data[dataVersion],
-	}
+func (s *Snapshot) decode(data registry.Object) error {
+	s.Metadata = data.Data
+	s.Hash = hashString(data.Data[dataHash])
 	var err error
-	if obj.Body != nil {
-		(*s).Value, err = decodePng(obj.Body)
+	if data.Body != nil {
+		s.Value, err = decodePng(data.Body)
 		if err != nil {
 			return errors.Join(errors.New("can't decode snapshot png"), err)
 		}
@@ -38,7 +32,7 @@ func (s *Snapshot) Decode(obj registry.Object) error {
 	return err
 }
 
-func (b Snapshot) Encode() (*registry.Object, error) {
+func (b Snapshot) encode() (*registry.Object, error) {
 	var (
 		body []byte
 		err  error
@@ -49,25 +43,34 @@ func (b Snapshot) Encode() (*registry.Object, error) {
 			return nil, errors.Join(errors.New("can't encode snapshot png"), err)
 		}
 	}
-	return &registry.Object{
+	data := &registry.Object{
 		Body: body,
-		Data: map[string]string{
-			dataVersion: b.Version,
-			dataHash:    b.Hash.String(),
-		},
-	}, nil
+		Data: b.Metadata,
+	}
+	data.Data[dataHash] = b.Hash.String()
+	return data, nil
 }
 
-func (s *Snapshot) Pull(key string, body bool) error {
-	obj, err := defaultRegistry.Pull(key, body)
+func (s *Snapshot) Head(key string) error {
+	data, err := defaultRegistry.Head(key)
 	if err != nil {
 		return errors.Join(errors.New("can't pull snapshot"), err)
 	}
-	return s.Decode(*obj)
+	s.Metadata = data
+	s.Hash = hashString(data[dataHash])
+	return nil
+}
+
+func (s *Snapshot) Pull(key string) error {
+	obj, err := defaultRegistry.Pull(key)
+	if err != nil {
+		return errors.Join(errors.New("can't pull snapshot"), err)
+	}
+	return s.decode(*obj)
 }
 
 func (s Snapshot) Push(key string) error {
-	obj, err := s.Encode()
+	obj, err := s.encode()
 	if err != nil {
 		return err
 	}
@@ -75,98 +78,6 @@ func (s Snapshot) Push(key string) error {
 		return errors.Join(errors.New("can't push snapshot"), err)
 	}
 	return nil
-}
-
-var baselineMaxApprovals = 20
-
-type Baseline struct {
-	Snapshot
-	Approvals []Approval
-}
-
-func (b *Baseline) Decode(obj registry.Object) error {
-	err := b.Snapshot.Decode(obj)
-	if err != nil {
-		return err
-	}
-	if value := obj.Data[dataMetadata]; value != "" {
-		err = base64Unpack(value, &b.Approvals)
-	}
-	return err
-}
-
-func (b Baseline) Encode() (*registry.Object, error) {
-	obj, err := b.Snapshot.Encode()
-	if err != nil {
-		return nil, err
-	}
-	if len(b.Approvals) > 0 {
-		data, err := base64Pack(b.Approvals)
-		if err != nil {
-			return nil, errors.Join(errors.New("can't gzip data"), err)
-		}
-		obj.Data[dataMetadata] = data
-	}
-	return obj, nil
-}
-
-func (b *Baseline) Pull(key string, body bool) error {
-	obj, err := defaultRegistry.Pull(key, body)
-	if err != nil {
-		return errors.Join(errors.New("can't pull baseline"), err)
-	}
-	return b.Decode(*obj)
-}
-
-func (b Baseline) Push(key string) error {
-	obj, err := b.Encode()
-	if err != nil {
-		return err
-	}
-	if err = defaultRegistry.Push(key, *obj); err != nil {
-		return errors.Join(errors.New("can't push baseline"), err)
-	}
-	return nil
-}
-
-func (b *Baseline) sort() {
-	sort.Slice(b.Approvals, func(i, j int) bool {
-		return b.Approvals[i].Ts < b.Approvals[j].Ts
-	})
-	return
-}
-
-func (b *Baseline) decline(hash Hash) {
-	for n := range b.Approvals {
-		if b.Approvals[n].Hash.Equal(hash, 0) {
-			b.Approvals[n] = b.Approvals[len(b.Approvals)-1]
-			b.Approvals = b.Approvals[:len(b.Approvals)-1]
-			return
-		}
-	}
-	return
-}
-
-func (b *Baseline) accept(patch Approval) {
-	patch.Ts = getUnixTs()
-
-	// updating
-	for n, val := range b.Approvals {
-		if val.Hash.Equal(patch.Hash, 0) {
-			b.Approvals[n] = patch
-			return
-		}
-	}
-
-	// overflowed
-	if len(b.Approvals) >= baselineMaxApprovals {
-		b.sort()
-		b.Approvals[0] = patch
-		return
-	}
-
-	// a new one
-	b.Approvals = append(b.Approvals, patch)
 }
 
 type Approval struct {
@@ -177,4 +88,58 @@ type Approval struct {
 
 func (t Approval) Valid() bool {
 	return time.Unix(t.Ts, 0).AddDate(0, 2, 0).Compare(time.Now()) == 1
+}
+
+type Approvals struct {
+	Value []Approval
+}
+
+func (b *Approvals) Pull(key string) error {
+	return registry.Pull(defaultRegistry, key, &b.Value)
+}
+
+func (b Approvals) Push(key string) error {
+	return registry.Push(defaultRegistry, key, b.Value)
+}
+
+func (b *Approvals) sort() {
+	sort.Slice(b.Value, func(i, j int) bool {
+		return b.Value[i].Ts < b.Value[j].Ts
+	})
+	return
+}
+
+func (b *Approvals) decline(hash Hash) {
+	for n := range b.Value {
+		if b.Value[n].Hash.Equal(hash, 0) {
+			b.Value[n] = b.Value[len(b.Value)-1]
+			b.Value = b.Value[:len(b.Value)-1]
+			return
+		}
+	}
+	return
+}
+
+var MaxApprovals = 100
+
+func (b *Approvals) accept(patch Approval) {
+	patch.Ts = getUnixTs()
+
+	// updating
+	for n, val := range b.Value {
+		if val.Hash.Equal(patch.Hash, 0) {
+			b.Value[n] = patch
+			return
+		}
+	}
+
+	// overflowed
+	if len(b.Value) >= MaxApprovals {
+		b.sort()
+		b.Value[0] = patch
+		return
+	}
+
+	// a new one
+	b.Value = append(b.Value, patch)
 }

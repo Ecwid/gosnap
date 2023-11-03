@@ -1,7 +1,6 @@
 package gosnap
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -13,15 +12,17 @@ var KeyToApproveUrl = func(key string) string {
 }
 
 type Otherness struct {
-	Ts           int64          `json:"ts"`
-	Version      string         `json:"version"`
-	Hash         Hash           `json:"hash"`
-	TargetHash   Hash           `json:"target_hash"`
-	Data         map[string]any `json:"data"` // user data
-	Key          string         `json:"key"`  // baseline key
-	TargetKey    string         `json:"target"`
-	OthernessKey string         `json:"otherness"`
-	changesKey   string         `json:"-"`
+	Ts           int64             `json:"ts"`
+	Hash         Hash              `json:"hash"`
+	Data         map[string]string `json:"data"` // user data
+	Key          string            `json:"key"`  // baseline key
+	TargetKey    string            `json:"target"`
+	OthernessKey string            `json:"otherness"`
+	changesKey   string            `json:"-"`
+}
+
+func (e Otherness) GetApproveUrl() string {
+	return KeyToApproveUrl(e.changesKey)
 }
 
 func (e Otherness) Error() string {
@@ -36,7 +37,7 @@ func (e Otherness) Error() string {
 		defaultRegistry.Resolve(e.Key),
 		defaultRegistry.Resolve(e.TargetKey),
 		defaultRegistry.Resolve(e.OthernessKey),
-		KeyToApproveUrl(e.changesKey),
+		e.GetApproveUrl(),
 	)
 }
 
@@ -44,40 +45,12 @@ type Batch struct {
 	Changes []Otherness
 }
 
-func (batch *Batch) Decode(obj registry.Object) error {
-	if obj.Body != nil {
-		err := json.Unmarshal(obj.Body, &batch.Changes)
-		if err != nil {
-			return errors.Join(errors.New("can't unmarshal snapshot"), err)
-		}
-	}
-	return nil
-}
-
-func (batch Batch) Encode() (*registry.Object, error) {
-	var obj = new(registry.Object)
-	var err error
-	obj.Body, err = json.Marshal(batch.Changes)
-	if err != nil {
-		return nil, errors.Join(errors.New("can't marshal to snapshot"), err)
-	}
-	return obj, nil
-}
-
 func (b *Batch) Pull(key string) error {
-	obj, err := defaultRegistry.Pull(key, true)
-	if err != nil {
-		return err
-	}
-	return b.Decode(*obj)
+	return registry.Pull(defaultRegistry, key, &b.Changes)
 }
 
 func (b Batch) Push(key string) error {
-	obj, err := b.Encode()
-	if err != nil {
-		return err
-	}
-	return defaultRegistry.Push(key, *obj)
+	return registry.Push(defaultRegistry, key, b.Changes)
 }
 
 func (batch Batch) findIndex(key string) int {
@@ -90,9 +63,10 @@ func (batch Batch) findIndex(key string) int {
 }
 
 func addChanges(key string, target Otherness) error {
+
 	var batch = new(Batch)
 	err := batch.Pull(key)
-	if err != nil {
+	if err != nil && !errors.Is(err, registry.ErrNoSuchKey) {
 		return err
 	}
 

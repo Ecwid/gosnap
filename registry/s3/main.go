@@ -49,66 +49,63 @@ func noSuchKeyErr(err error) error {
 	return err
 }
 
-func (c s3registry) Pull(key string, downloadBody bool) (*registry.Object, error) {
-	var (
-		value    = new(registry.Object)
-		metadata map[string]*string
-	)
-	if downloadBody {
-		output, err := c.s3.GetObject(&s3.GetObjectInput{
-			Bucket: aws.String(c.bucket),
-			Key:    aws.String(key),
-		})
-		if err != nil {
-			return nil, noSuchKeyErr(err)
-		}
-		var buf bytes.Buffer
-		if _, err = io.Copy(&buf, output.Body); err != nil {
-			return nil, err
-		}
-		value.Body = buf.Bytes()
-		value.Last = *output.LastModified
-		metadata = output.Metadata
-	} else {
-		head, err := c.s3.HeadObject(&s3.HeadObjectInput{
-			Bucket: aws.String(c.bucket),
-			Key:    aws.String(key),
-		})
-		if err != nil {
-			return nil, noSuchKeyErr(err)
-		}
-		metadata = head.Metadata
-		value.Last = *head.LastModified
+func (c s3registry) Head(key string) (map[string]string, error) {
+	head, err := c.s3.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, noSuchKeyErr(err)
 	}
-	value.Data = map[string]string{}
-	for key, val := range metadata {
-		if val != nil {
-			value.Data[key] = *val
+	data := map[string]string{}
+	for key, value := range head.Metadata {
+		if value != nil {
+			data[key] = *value
 		}
 	}
-	return value, nil
+	return data, nil
+}
+
+func (c s3registry) Pull(key string) (*registry.Object, error) {
+	var data = new(registry.Object)
+	output, err := c.s3.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, noSuchKeyErr(err)
+	}
+	var buf bytes.Buffer
+	if _, err = io.Copy(&buf, output.Body); err != nil {
+		return nil, err
+	}
+	data.Body = buf.Bytes()
+	data.Data = map[string]string{
+		"last-modified-unix": fmt.Sprint(output.LastModified.Unix()),
+	}
+	for key, value := range output.Metadata {
+		if value != nil {
+			data.Data[key] = *value
+		}
+	}
+	return data, nil
 }
 
 func (c s3registry) Push(key string, object registry.Object) error {
-	// There is no defined limit on the total size of user metadata that can be applied to an object,
-	// but a single HTTP request is limited to 16,000 bytes.
-	// todo
-	// if object.Data > snapshotMaxSize {
-	// return errors.New("snapshot data is too big")
-	// }
 	req := &s3.PutObjectInput{
 		Bucket:   aws.String(c.bucket),
 		Key:      aws.String(key),
 		ACL:      aws.String(s3.BucketCannedACLPublicRead),
 		Metadata: map[string]*string{},
 	}
-	for key, value := range object.Data {
-		req.Metadata[key] = &value
-	}
 	if object.Body != nil {
 		req.SetContentType(http.DetectContentType(object.Body))
 		req.SetBody(bytes.NewReader(object.Body))
 		req.SetContentLength(int64(len(object.Body)))
+	}
+	for k, v := range object.Data {
+		value := v
+		req.Metadata[k] = &value
 	}
 	_, err := c.s3.PutObject(req)
 	return err

@@ -2,15 +2,10 @@ package gosnap
 
 import (
 	"bytes"
-	"compress/gzip"
-	"encoding/base64"
-	"encoding/json"
 	"image"
 	"image/color"
 	"image/png"
-	"io"
 	"math/big"
-	"strings"
 
 	"golang.org/x/image/draw"
 )
@@ -41,6 +36,20 @@ func grayToBigInt(img *image.Gray) *big.Int {
 		}
 	}
 	return hash
+}
+
+type Masked struct {
+	image.Image
+	clr  color.RGBA
+	mask image.Rectangle
+}
+
+func (t Masked) At(x, y int) color.Color {
+	if t.mask.Min.X <= x && x < t.mask.Max.X &&
+		t.mask.Min.Y <= y && y < t.mask.Max.Y {
+		return t.clr
+	}
+	return t.Image.At(x, y)
 }
 
 func encodePng(img image.Image) ([]byte, error) {
@@ -96,49 +105,4 @@ func difference(a, b image.Image) image.Image {
 		}
 	}
 	return img
-}
-
-func gzUnpack(gzdata string, value any) error {
-	gzr, err := gzip.NewReader(strings.NewReader(gzdata))
-	if err != nil {
-		return err
-	}
-	var buf bytes.Buffer
-	if _, err = io.Copy(&buf, gzr); err != nil {
-		return err
-	}
-	return json.Unmarshal(buf.Bytes(), value)
-}
-
-func base64Pack(value any) (string, error) {
-	body, err := json.Marshal(value)
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(body), nil
-}
-
-func base64Unpack(data string, value any) error {
-	b, err := base64.StdEncoding.DecodeString(data)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, value)
-}
-
-func gzPack(value any) (string, error) {
-	body, err := json.Marshal(value)
-	if err != nil {
-		return "", err
-	}
-	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
-	_, err = gz.Write(body)
-	if err != nil {
-		return "", err
-	}
-	if err = gz.Close(); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }

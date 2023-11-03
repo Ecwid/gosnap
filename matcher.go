@@ -2,7 +2,7 @@ package gosnap
 
 import (
 	"errors"
-	"image"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +13,6 @@ import (
 
 var (
 	defaultRegistry registry.Abstract
-	TagPrefix       = "manual-approvals"
 )
 
 func SetRegistry(r registry.Abstract) {
@@ -24,68 +23,64 @@ func getUnixTs() int64 {
 	return time.Now().Unix()
 }
 
-type Tag struct {
-	Name   string
-	Prefix string
-}
-
-func (t Tag) String() string {
-	return t.Prefix + "/" + t.Name
-}
-
 type Matcher struct {
-	tag             Tag
-	version         string
+	runID           string
 	approvalEnabled bool
+	update          bool
+	forceUpdate     bool
+	approvalKey     string
 	distance        int
 	hashSize        uint
+	data            map[string]string
 	sync            Synced
-	prefix          []string
+	path            []string
 }
 
-func NewMatcher(snapshotVersion string) Matcher {
+func NewMatcher(runID string) Matcher {
 	return Matcher{
-		version:         snapshotVersion,
+		runID:           runID,
+		approvalKey:     "",
 		approvalEnabled: true,
+		update:          false,
+		forceUpdate:     false,
 		distance:        6,
 		hashSize:        1024,
 		sync:            NewSyncedOps(),
-		tag: Tag{
-			Prefix: TagPrefix,
-			Name:   uuid.NewString(),
-		},
+		data:            map[string]string{},
 	}
 }
 
-func (m Matcher) GroupByTag(tag string) Matcher {
-	m.tag.Name = tag
+func (m Matcher) ApprovalSource(key string) Matcher {
+	m.approvalKey = key
 	return m
 }
 
-func (m Matcher) WithPrefix(p ...string) Matcher {
-	m.prefix = append(m.prefix, p...)
+func (m Matcher) Update(enable bool) Matcher {
+	m.update = enable
 	return m
 }
 
-func (m Matcher) prefixString() string {
-	return strings.Join(m.prefix, "/")
+func (m Matcher) ForceUpdate(enable bool) Matcher {
+	m.forceUpdate = enable
+	return m
+}
+
+func (m Matcher) Metadata(key string, value any) Matcher {
+	m.data[key] = fmt.Sprint(value)
+	return m
+}
+
+func (m Matcher) PrependSnapshotPath(args ...string) Matcher {
+	m.path = append(m.path, args...)
+	return m
+}
+
+func (m Matcher) prependPathString() string {
+	return strings.Join(m.path, "/")
 }
 
 func (m Matcher) generateKey() string {
-	return m.prefixString() + "/" + uuid.NewString()
-}
-
-func (m Matcher) UploadSnapshot(hash Hash, image image.Image) (key string, err error) {
-	upload := Snapshot{
-		Version: m.version,
-		Hash:    hash,
-		Value:   image,
-	}
-	key = m.generateKey()
-	if err = upload.Push(key); err != nil {
-		err = errors.Join(errors.New("can't upload snapshot image"), err)
-	}
-	return key, err
+	return m.prependPathString() + "/" + uuid.NewString()
 }
 
 type Synced struct {
@@ -104,40 +99,36 @@ func NewSyncedOps() Synced {
 	}
 }
 
-func (s Synced) Accept(other Otherness, approver string) error {
+func (s Synced) Accept(key string, hash Hash, approver string) error {
 	return s.Sync(func() error {
-		var baseline = new(Baseline)
-		if err := baseline.Pull(other.Key, false); err != nil {
+		var approvals = new(Approvals)
+		err := approvals.Pull(key)
+		if err != nil && !errors.Is(err, registry.ErrNoSuchKey) {
 			return err
 		}
-		baseline.accept(Approval{Hash: other.Hash, Approver: approver})
-		return baseline.Push(other.Key)
+		approvals.accept(Approval{Hash: hash, Approver: approver})
+		return approvals.Push(key)
 	})
 }
 
-func (s Synced) Decline(other Otherness) error {
+func (s Synced) Decline(key string, hash Hash) error {
 	return s.Sync(func() error {
-		var baseline = new(Baseline)
-		if err := baseline.Pull(other.Key, false); err != nil {
+		var approvals = new(Approvals)
+		if err := approvals.Pull(key); err != nil {
 			return err
 		}
-		baseline.decline(other.Hash)
-		return baseline.Push(other.Key)
+		approvals.decline(hash)
+		return approvals.Push(key)
 	})
 }
 
 func (s Synced) CopySnapshot(src, dest string) error {
 	return s.Sync(func() error {
-		var err error
-		var baseline = new(Baseline)
-		// don't load snapshot body
-		if err = baseline.Pull(dest, false); err != nil {
+		var snapshot = new(Snapshot)
+		if err := snapshot.Pull(src); err != nil {
 			return err
 		}
-		if err = baseline.Snapshot.Pull(src, true); err != nil {
-			return err
-		}
-		return baseline.Push(dest)
+		return snapshot.Push(dest)
 	})
 }
 
