@@ -2,21 +2,48 @@ package gosnap
 
 import (
 	"errors"
+	"fmt"
 	"image"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/ecwid/gosnap/registry"
 )
 
 const (
-	dataHash = "Dhash"
+	dataHash = "Hash"
+	keyX     = "X"
+	keyY     = "Y"
 )
 
 type Snapshot struct {
 	Value    image.Image
 	Hash     Hash
 	Metadata map[string]string
+}
+
+func atoi(value string) int {
+	i, err := strconv.Atoi(value)
+	if err != nil {
+		return 0
+	}
+	return i
+}
+
+func (b Snapshot) GetSize() (x int, y int) {
+	valueX, ok1 := b.Metadata[keyX]
+	valueY, ok2 := b.Metadata[keyY]
+	if ok1 && ok2 {
+		x = atoi(valueX)
+		y = atoi(valueY)
+		return x, y
+	}
+	if b.Value != nil {
+		point := b.Value.Bounds().Max
+		return point.X, point.Y
+	}
+	return 0, 0
 }
 
 func (s *Snapshot) decode(data registry.Object) error {
@@ -42,6 +69,9 @@ func (b Snapshot) encode() (*registry.Object, error) {
 		if err != nil {
 			return nil, errors.Join(errors.New("can't encode snapshot png"), err)
 		}
+		x, y := b.GetSize()
+		b.Metadata[keyX] = fmt.Sprint(x)
+		b.Metadata[keyY] = fmt.Sprint(y)
 	}
 	data := &registry.Object{
 		Body: body,

@@ -28,6 +28,7 @@ type Matcher struct {
 	approvalEnabled bool
 	update          bool
 	forceUpdate     bool
+	normalize       bool
 	approvalKey     string
 	distance        int
 	hashSize        uint
@@ -43,6 +44,7 @@ func NewMatcher(runID string) Matcher {
 		approvalEnabled: true,
 		update:          false,
 		forceUpdate:     false,
+		normalize:       false,
 		distance:        6,
 		hashSize:        1024,
 		sync:            NewSyncedOps(),
@@ -52,6 +54,11 @@ func NewMatcher(runID string) Matcher {
 
 func (m Matcher) ApprovalSource(key string) Matcher {
 	m.approvalKey = key
+	return m
+}
+
+func (m Matcher) NormalizeSize(enable bool) Matcher {
+	m.normalize = enable
 	return m
 }
 
@@ -70,7 +77,7 @@ func (m Matcher) Metadata(key string, value any) Matcher {
 	return m
 }
 
-func (m Matcher) PrependSnapshotPath(args ...string) Matcher {
+func (m Matcher) SnapshotSource(args ...string) Matcher {
 	m.path = append(m.path, args...)
 	return m
 }

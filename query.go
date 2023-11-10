@@ -9,13 +9,24 @@ import (
 	"github.com/ecwid/gosnap/registry"
 )
 
-var ErrBaselinePublished = errors.New("published now (baseline was not found)")
+type Published struct {
+	Key string
+}
+
+func (p Published) Error() string {
+	return fmt.Sprint("snapshot published: ", defaultRegistry.Resolve(p.Key))
+}
+
+type subImage interface {
+	SubImage(r image.Rectangle) image.Image
+}
 
 type Query struct {
-	matcher Matcher
-	key     string
-	target  image.Image
-	data    map[string]string
+	matcher  Matcher
+	key      string
+	baseline image.Image
+	target   image.Image
+	data     map[string]string
 }
 
 func (f Matcher) New(actual image.Image) Query {
@@ -40,6 +51,11 @@ func (q Query) Snapshot(key string) Query {
 	return q
 }
 
+func (q Query) SnapshotFromImage(baseline image.Image) Query {
+	q.baseline = baseline
+	return q
+}
+
 func (q Query) Metadata(key string, value any) Query {
 	q.data[key] = fmt.Sprint(value)
 	return q
@@ -49,51 +65,61 @@ func (q Query) baselineKey() string {
 	return q.matcher.prependPathString() + "/" + q.key
 }
 
+func (q Query) makeTargetHash(baseline *Snapshot) Hash {
+	if q.matcher.normalize {
+		x, y := baseline.GetSize()
+		croppedTarget := q.target.(subImage).SubImage(image.Rect(0, 0, x, y))
+		return MakeHash(croppedTarget, q.matcher.hashSize)
+	}
+	return MakeHash(q.target, q.matcher.hashSize)
+}
+
 func (q Query) Compare() error {
 	if q.target == nil {
 		return errors.New("no target (actual) image set")
 	}
-	if q.key == "" {
-		return errors.New("baseline key is required")
+	if q.key == "" && q.baseline == nil {
+		return errors.New("expected baseline key (or image) is required")
 	}
 	if q.matcher.approvalEnabled && q.matcher.approvalKey == "" {
 		return errors.New("approvalEnabled but approvalKey not defined")
 	}
-	targetHash := MakeHash(q.target, q.matcher.hashSize)
 
 	var (
 		err         error
-		baselineKey = q.baselineKey()
+		baselineKey = ""
 		baseline    = new(Snapshot)
 	)
 
-	var updateBaseline = func() error {
-		err = q.updateSnapshotKey(baselineKey, targetHash, q.target)
+	if q.baseline == nil {
+		baselineKey = q.baselineKey()
+		// get baseline hash
+		err = baseline.Head(baselineKey)
+
+		// force update baseline without matching and exit
+		if errors.Is(err, registry.ErrNoSuchKey) || q.matcher.forceUpdate {
+			hash := MakeHash(q.target, q.matcher.hashSize)
+			return q.uploadBaseline(baselineKey, hash, q.target)
+		}
 		if err != nil {
 			return err
 		}
-		return ErrBaselinePublished
+	} else {
+		// comparing two images
+		baseline.Value = q.baseline
+		baseline.Hash = MakeHash(q.baseline, q.matcher.hashSize)
 	}
 
-	// force update baseline without matching and exit
-	if q.matcher.forceUpdate {
-		return updateBaseline()
-	}
+	// Comparing the baseline with target
+	targetHash := q.makeTargetHash(baseline)
 
-	if err = baseline.Head(baselineKey); err != nil {
-		if errors.Is(err, registry.ErrNoSuchKey) {
-			return updateBaseline()
-		}
-		return err
-	}
-
-	othernessHash, equal := Compare(baseline.Hash, targetHash, q.matcher.distance)
+	othernessHash, equal := baseline.Hash.equal(targetHash, q.matcher.distance)
 	if equal {
 		return nil
 	}
 	// update baseline and exit
-	if q.matcher.update {
-		return updateBaseline()
+	if q.matcher.update && baselineKey != "" {
+		return q.uploadBaseline(baselineKey, targetHash, q.target)
 	}
 	// check if approved
 	if q.matcher.approvalEnabled {
@@ -120,7 +146,9 @@ func (q Query) Compare() error {
 		}
 
 		// no hash matches so we need download the baseline image to make diff between them
-		baseline.Pull(baselineKey)
+		if baselineKey != "" {
+			baseline.Pull(baselineKey)
+		}
 		// upload otherness image
 		other := difference(baseline.Value, q.target)
 		othernessKey, err = q.UploadSnapshot(othernessHash, other)
@@ -136,14 +164,6 @@ func (q Query) Compare() error {
 		TargetKey:    targetKey,
 		OthernessKey: othernessKey,
 	}
-}
-
-func Compare(baseline Hash, target Hash, distance int) (hash Hash, equal bool) {
-	hash = baseline.Xor(target) // difference hash
-	if hash.onesLess(distance) {
-		return hash, true
-	}
-	return hash, false
 }
 
 func ApprovalsContains(approvals []Approval, hash Hash, distance int) []Approval {
@@ -165,11 +185,22 @@ func ApprovalsContains(approvals []Approval, hash Hash, distance int) []Approval
 
 func (q Query) UploadSnapshot(hash Hash, image image.Image) (key string, err error) {
 	key = q.matcher.generateKey()
-	err = q.updateSnapshotKey(key, hash, image)
+	err = q.pushSnapshot(key, hash, image)
 	return key, err
 }
 
-func (q Query) updateSnapshotKey(key string, hash Hash, image image.Image) (err error) {
+func (q Query) uploadBaseline(key string, newHash Hash, newImage image.Image) error {
+	if key == "" {
+		return errors.New("can't update baseline snapshot due key is empty")
+	}
+	err := q.pushSnapshot(key, newHash, newImage)
+	if err != nil {
+		return err
+	}
+	return Published{Key: key}
+}
+
+func (q Query) pushSnapshot(key string, hash Hash, image image.Image) (err error) {
 	upload := Snapshot{
 		Hash:     hash,
 		Value:    image,
