@@ -52,11 +52,6 @@ func NewMatcher(runID string) Matcher {
 	}
 }
 
-func (m Matcher) ApprovalSource(key string) Matcher {
-	m.approvalKey = key
-	return m
-}
-
 func (m Matcher) NormalizeSize(enable bool) Matcher {
 	m.normalize = enable
 	return m
@@ -69,6 +64,12 @@ func (m Matcher) Update(enable bool) Matcher {
 
 func (m Matcher) ForceUpdate(enable bool) Matcher {
 	m.forceUpdate = enable
+	return m
+}
+
+func (m Matcher) ApprovalEnabled(enable bool, key string) Matcher {
+	m.approvalEnabled = enable
+	m.approvalKey = key
 	return m
 }
 

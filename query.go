@@ -65,9 +65,8 @@ func (q Query) baselineKey() string {
 	return q.matcher.prependPathString() + "/" + q.key
 }
 
-func (q Query) makeTargetHash(baseline *Snapshot) Hash {
+func (q Query) makeTargetHash(x, y int) Hash {
 	if q.matcher.normalize {
-		x, y := baseline.GetSize()
 		croppedTarget := q.target.(subImage).SubImage(image.Rect(0, 0, x, y))
 		return MakeHash(croppedTarget, q.matcher.hashSize)
 	}
@@ -111,7 +110,7 @@ func (q Query) Compare() error {
 	}
 
 	// Comparing the baseline with target
-	targetHash := q.makeTargetHash(baseline)
+	targetHash := q.makeTargetHash(baseline.GetSize())
 
 	othernessHash, equal := baseline.Hash.equal(targetHash, q.matcher.distance)
 	if equal {
