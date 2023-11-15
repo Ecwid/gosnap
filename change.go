@@ -12,12 +12,13 @@ var KeyToApproveUrl = func(key string) string {
 }
 
 type Change struct {
-	Ts      int64             `json:"ts"`
-	Key     string            `json:"key"`
-	Hash    Hash              `json:"hash"`
-	Data    map[string]string `json:"data"`
-	Target  string            `json:"target"`
-	Overlay string            `json:"overlay"`
+	Ts         int64             `json:"ts"`
+	Key        string            `json:"key"`
+	XorHash    Hash              `json:"xorhash"`
+	TargetHash Hash              `json:"hash"`
+	Data       map[string]string `json:"data"`
+	Target     string            `json:"target"`
+	Overlay    string            `json:"overlay"`
 
 	approveLabel string `json:"-"`
 }
@@ -33,7 +34,7 @@ func (e Change) Error() string {
 	actual:     %s
 	overlay:    %s
 	`,
-		e.Hash.onesCount(),
+		e.XorHash.onesCount(),
 		defaultRegistry.Resolve(e.Key),
 		defaultRegistry.Resolve(e.Target),
 		defaultRegistry.Resolve(e.Overlay),

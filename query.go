@@ -99,7 +99,7 @@ func (q Query) Compare() error {
 	// Comparing the baseline with target
 	targetHash := q.makeTargetHash(baseline.GetSize())
 
-	othernessHash, equal := baseline.Hash.equal(targetHash, q.matcher.distance)
+	xorHash, equal := baseline.Hash.equal(targetHash, q.matcher.distance)
 	if equal {
 		return nil
 	}
@@ -114,7 +114,7 @@ func (q Query) Compare() error {
 		if err != nil && !errors.Is(err, registry.ErrNoSuchKey) {
 			return errors.Join(errors.New("can't pull approvals"), err)
 		}
-		if len(ApprovalsContains(approvals.Value, othernessHash, q.matcher.distance)) > 0 {
+		if len(ApprovalsContains(approvals.Value, xorHash, q.matcher.distance)) > 0 {
 			return nil
 		}
 	}
@@ -139,18 +139,19 @@ func (q Query) Compare() error {
 
 		// upload otherness image
 		other := difference(baseline.Value, q.target)
-		overlayKey, err = q.UploadSnapshot(othernessHash, other)
+		overlayKey, err = q.UploadSnapshot(xorHash, other)
 		if err != nil {
 			return err
 		}
 	}
 
 	return Change{
-		Key:     baselineKey,
-		Hash:    othernessHash,
-		Data:    q.data,
-		Target:  targetKey,
-		Overlay: overlayKey,
+		Key:        baselineKey,
+		XorHash:    xorHash,
+		TargetHash: targetHash,
+		Data:       q.data,
+		Target:     targetKey,
+		Overlay:    overlayKey,
 	}
 }
 

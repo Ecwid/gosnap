@@ -114,10 +114,10 @@ func DefaultCompare(expected, actual image.Image) error {
 		distance = 6
 	)
 	var (
-		hash1 = MakeHash(expected, hashSize)
-		hash2 = MakeHash(actual, hashSize)
+		baselineHash = MakeHash(expected, hashSize)
+		targetHash   = MakeHash(actual, hashSize)
 	)
-	otherHash, equal := hash1.equal(hash2, distance)
+	xorHash, equal := baselineHash.equal(targetHash, distance)
 	if equal {
 		return nil
 	}
@@ -134,10 +134,11 @@ func DefaultCompare(expected, actual image.Image) error {
 		return err
 	}
 	return Change{
-		Key:     baseline,
-		Hash:    otherHash,
-		Target:  target,
-		Overlay: overlay,
+		Key:        baseline,
+		XorHash:    xorHash,
+		TargetHash: targetHash,
+		Target:     target,
+		Overlay:    overlay,
 	}
 }
 
