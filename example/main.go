@@ -37,16 +37,13 @@ func load(url string) (image.Image, error) {
 }
 
 func main() {
-
-	gosnap.SetRegistry(s3.NewRegistry("id", "secret", "my-bucket"))
-
-	// baseline := MustLoad("https://ecwid-screenshots.s3.amazonaws.com/2023/1/chromium/112/direct-free-control-panel/select-plan")
-	target := MustLoad("https://s3.amazonaws.com/2023")
+	gosnap.SetRegistry(s3.NewRegistry("", "", ""))
+	target := MustLoad("https://s3.amazonaws.com/31d662d7-1dd4-45bf-8826-8b4c90d0d7ca")
 
 	matcher := gosnap.
 		NewMatcher("stable").
-		ApprovalSource("approvals2023").
-		PrependSnapshotPath("2023", "1", "chromium", "112")
+		ApprovalEnabled(true, "approvals_2023").
+		SnapshotSource("2023", "chromium", "117")
 
 	err := matcher.New(target).
 		Snapshot("direct-free-control-panel/select-plan").

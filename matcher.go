@@ -3,6 +3,7 @@ package gosnap
 import (
 	"errors"
 	"fmt"
+	"image"
 	"strings"
 	"sync"
 	"time"
@@ -84,11 +85,60 @@ func (m Matcher) SnapshotSource(args ...string) Matcher {
 }
 
 func (m Matcher) prependPathString() string {
-	return strings.Join(m.path, "/")
+	if len(m.path) > 0 {
+		return strings.Join(m.path, "/")
+	}
+	return ""
 }
 
 func (m Matcher) generateKey() string {
-	return m.prependPathString() + "/" + uuid.NewString()
+	return m.prependPathString() + uuid.NewString()
+}
+
+func upload(image image.Image) (string, error) {
+	key := uuid.NewString()
+	return key, Snapshot{Value: image}.Push(key)
+}
+
+func MustUpload(image image.Image) string {
+	k, err := upload(image)
+	if err != nil {
+		panic(err)
+	}
+	return defaultRegistry.Resolve(k)
+}
+
+func DefaultCompare(expected, actual image.Image) error {
+	const (
+		hashSize = 1024
+		distance = 6
+	)
+	var (
+		hash1 = MakeHash(expected, hashSize)
+		hash2 = MakeHash(actual, hashSize)
+	)
+	otherHash, equal := hash1.equal(hash2, distance)
+	if equal {
+		return nil
+	}
+	baseline, err := upload(expected)
+	if err != nil {
+		return err
+	}
+	target, err := upload(actual)
+	if err != nil {
+		return err
+	}
+	overlay, err := upload(difference(expected, actual))
+	if err != nil {
+		return err
+	}
+	return Change{
+		Key:     baseline,
+		Hash:    otherHash,
+		Target:  target,
+		Overlay: overlay,
+	}
 }
 
 type Synced struct {
@@ -130,12 +180,13 @@ func (s Synced) Decline(key string, hash Hash) error {
 	})
 }
 
-func (s Synced) CopySnapshot(src, dest string) error {
+func (s Synced) CopySnapshot(src, dest, author string) error {
 	return s.Sync(func() error {
 		var snapshot = new(Snapshot)
 		if err := snapshot.Pull(src); err != nil {
 			return err
 		}
+		snapshot.Metadata["author"] = author
 		return snapshot.Push(dest)
 	})
 }

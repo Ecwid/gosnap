@@ -22,11 +22,10 @@ type subImage interface {
 }
 
 type Query struct {
-	matcher  Matcher
-	key      string
-	baseline image.Image
-	target   image.Image
-	data     map[string]string
+	matcher Matcher
+	key     string
+	target  image.Image
+	data    map[string]string
 }
 
 func (f Matcher) New(actual image.Image) Query {
@@ -51,11 +50,6 @@ func (q Query) Snapshot(key string) Query {
 	return q
 }
 
-func (q Query) SnapshotFromImage(baseline image.Image) Query {
-	q.baseline = baseline
-	return q
-}
-
 func (q Query) Metadata(key string, value any) Query {
 	q.data[key] = fmt.Sprint(value)
 	return q
@@ -77,8 +71,8 @@ func (q Query) Compare() error {
 	if q.target == nil {
 		return errors.New("no target (actual) image set")
 	}
-	if q.key == "" && q.baseline == nil {
-		return errors.New("expected baseline key (or image) is required")
+	if q.key == "" {
+		return errors.New("baseline key is required")
 	}
 	if q.matcher.approvalEnabled && q.matcher.approvalKey == "" {
 		return errors.New("approvalEnabled but approvalKey not defined")
@@ -86,27 +80,20 @@ func (q Query) Compare() error {
 
 	var (
 		err         error
-		baselineKey = ""
+		baselineKey = q.baselineKey()
 		baseline    = new(Snapshot)
 	)
 
-	if q.baseline == nil {
-		baselineKey = q.baselineKey()
-		// get baseline hash
-		err = baseline.Head(baselineKey)
+	// get baseline hash
+	err = baseline.Head(baselineKey)
 
-		// force update baseline without matching and exit
-		if errors.Is(err, registry.ErrNoSuchKey) || q.matcher.forceUpdate {
-			hash := MakeHash(q.target, q.matcher.hashSize)
-			return q.uploadBaseline(baselineKey, hash, q.target)
-		}
-		if err != nil {
-			return err
-		}
-	} else {
-		// comparing two images
-		baseline.Value = q.baseline
-		baseline.Hash = MakeHash(q.baseline, q.matcher.hashSize)
+	// force update baseline without matching and exit
+	if errors.Is(err, registry.ErrNoSuchKey) || q.matcher.forceUpdate {
+		hash := MakeHash(q.target, q.matcher.hashSize)
+		return q.uploadBaseline(baselineKey, hash, q.target)
+	}
+	if err != nil {
+		return err
 	}
 
 	// Comparing the baseline with target
@@ -117,7 +104,7 @@ func (q Query) Compare() error {
 		return nil
 	}
 	// update baseline and exit
-	if q.matcher.update && baselineKey != "" {
+	if q.matcher.update {
 		return q.uploadBaseline(baselineKey, targetHash, q.target)
 	}
 	// check if approved
@@ -134,8 +121,8 @@ func (q Query) Compare() error {
 
 	const uploadOtherness = true
 	var (
-		targetKey    string
-		othernessKey string
+		targetKey  string
+		overlayKey string
 	)
 	if uploadOtherness {
 		// upload target image
@@ -145,23 +132,25 @@ func (q Query) Compare() error {
 		}
 
 		// no hash matches so we need download the baseline image to make diff between them
-		if baselineKey != "" {
-			baseline.Pull(baselineKey)
+		err = baseline.Pull(baselineKey)
+		if err != nil {
+			return err
 		}
+
 		// upload otherness image
 		other := difference(baseline.Value, q.target)
-		othernessKey, err = q.UploadSnapshot(othernessHash, other)
+		overlayKey, err = q.UploadSnapshot(othernessHash, other)
 		if err != nil {
 			return err
 		}
 	}
 
-	return Otherness{
-		Key:          baselineKey,
-		Hash:         othernessHash,
-		Data:         q.data,
-		TargetKey:    targetKey,
-		OthernessKey: othernessKey,
+	return Change{
+		Key:     baselineKey,
+		Hash:    othernessHash,
+		Data:    q.data,
+		Target:  targetKey,
+		Overlay: overlayKey,
 	}
 }
 
@@ -216,14 +205,14 @@ func (q Query) pushSnapshot(key string, hash Hash, image image.Image) (err error
 
 func (q Query) CompareAndSaveForApproval() error {
 	compareError := q.Compare()
-	if err, ok := compareError.(Otherness); ok {
+	if err, ok := compareError.(Change); ok {
 		syncError := q.matcher.sync.Sync(func() error {
 			return addChanges(q.matcher.runID, err)
 		})
 		if syncError != nil {
 			return errors.Join(compareError, errors.New("can't add changes for approval"), syncError)
 		}
-		err.changesKey = q.matcher.runID
+		err.approveLabel = q.matcher.runID
 		return err
 	}
 	return compareError

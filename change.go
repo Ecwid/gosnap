@@ -11,38 +11,41 @@ var KeyToApproveUrl = func(key string) string {
 	return defaultRegistry.Resolve(key)
 }
 
-type Otherness struct {
-	Ts           int64             `json:"ts"`
-	Hash         Hash              `json:"hash"`
-	Data         map[string]string `json:"data"` // user data
-	Key          string            `json:"key"`  // baseline key
-	TargetKey    string            `json:"target"`
-	OthernessKey string            `json:"otherness"`
-	changesKey   string            `json:"-"`
+type Change struct {
+	Ts      int64             `json:"ts"`
+	Key     string            `json:"key"`
+	Hash    Hash              `json:"hash"`
+	Data    map[string]string `json:"data"`
+	Target  string            `json:"target"`
+	Overlay string            `json:"overlay"`
+
+	approveLabel string `json:"-"`
 }
 
-func (e Otherness) GetApproveUrl() string {
-	return KeyToApproveUrl(e.changesKey)
+func (e Change) GetApproveUrl() string {
+	return KeyToApproveUrl(e.approveLabel)
 }
 
-func (e Otherness) Error() string {
-	return fmt.Sprintf(`
+func (e Change) Error() string {
+	s := fmt.Sprintf(`
 	the page changed (score %d)
 	expected:   %s
 	actual:     %s
-	difference: %s
-	please approve: %s
+	overlay:    %s
 	`,
 		e.Hash.onesCount(),
 		defaultRegistry.Resolve(e.Key),
-		defaultRegistry.Resolve(e.TargetKey),
-		defaultRegistry.Resolve(e.OthernessKey),
-		e.GetApproveUrl(),
+		defaultRegistry.Resolve(e.Target),
+		defaultRegistry.Resolve(e.Overlay),
 	)
+	if e.approveLabel != "" {
+		s += fmt.Sprintf("please approve: %s\n", e.GetApproveUrl())
+	}
+	return s
 }
 
 type Batch struct {
-	Changes []Otherness
+	Changes []Change
 }
 
 func (b *Batch) Pull(key string) error {
@@ -62,7 +65,7 @@ func (batch Batch) findIndex(key string) int {
 	return -1
 }
 
-func addChanges(key string, target Otherness) error {
+func addChanges(key string, target Change) error {
 
 	var batch = new(Batch)
 	err := batch.Pull(key)
@@ -98,7 +101,7 @@ func deleteChanges(key string, changeKey *string) error {
 	}
 
 	if changeKey == nil { // delete all
-		batch.Changes = []Otherness{}
+		batch.Changes = []Change{}
 	} else if n := batch.findIndex(*changeKey); n >= 0 { // delete by address
 		batch.Changes[n] = batch.Changes[len(batch.Changes)-1]
 		batch.Changes = batch.Changes[:len(batch.Changes)-1]
