@@ -57,7 +57,9 @@ func (c s3registry) Head(key string) (map[string]string, error) {
 	if err != nil {
 		return nil, noSuchKeyErr(err)
 	}
-	data := map[string]string{}
+	data := map[string]string{
+		"last-modified-unix": fmt.Sprint(head.LastModified.Unix()),
+	}
 	for key, value := range head.Metadata {
 		if value != nil {
 			data[key] = *value

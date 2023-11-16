@@ -55,10 +55,15 @@ func (h Hash) Or(other Hash) Hash {
 	return Hash{value: or}
 }
 
-func MakeHash(img image.Image, bits uint) Hash {
+func MakeGrayAndHash(img image.Image, bits uint) (*image.Gray, Hash) {
 	px := int(math.Sqrt(float64(bits)))
 	gray := grayScale(img, px, px)
-	return Hash{value: grayToBigInt(gray)}
+	return gray, Hash{value: grayToBigInt(gray)}
+}
+
+func MakeHash(img image.Image, bits uint) Hash {
+	_, hash := MakeGrayAndHash(img, bits)
+	return hash
 }
 
 func (h Hash) MarshalJSON() ([]byte, error) {
