@@ -56,7 +56,7 @@ func (q Query) Metadata(key string, value any) Query {
 }
 
 func (q Query) baselineKey() string {
-	return q.matcher.prependPathString() + "/" + q.key
+	return q.matcher.prependPathString() + q.key
 }
 
 func (q Query) makeTargetHash(x, y int) Hash {
