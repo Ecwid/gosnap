@@ -76,3 +76,20 @@ func (h *Hash) UnmarshalJSON(b []byte) (err error) {
 	*h = hashString(str)
 	return nil
 }
+
+func (h *Hash) SquareString(sq int) string {
+	s := strings.Builder{}
+	pow := (sq * sq) - sq
+	sqso := sq - 1
+	for n := 0; n < pow; n++ {
+		if h.value.Bit(n) == 1 {
+			s.WriteByte('1')
+		} else {
+			s.WriteByte('0')
+		}
+		if (n+1)%sqso == 0 {
+			s.WriteByte('\n')
+		}
+	}
+	return s.String()
+}

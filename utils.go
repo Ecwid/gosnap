@@ -28,7 +28,7 @@ func grayToBigInt(img *image.Gray) *big.Int {
 		left = img.GrayAt(r.Min.X, y).Y
 		for x = r.Min.X + 1; x < r.Max.X; x++ {
 			right = img.GrayAt(x, y).Y
-			if right > left {
+			if right > left && right-left > 1 {
 				hash.SetBit(hash, n, 1)
 			}
 			n++
@@ -79,7 +79,7 @@ func min(a, b int) int {
 	return b
 }
 
-func difference(a, b image.Image) image.Image {
+func overlay(a, b image.Image) image.Image {
 	var (
 		ab   = a.Bounds()
 		bb   = b.Bounds()

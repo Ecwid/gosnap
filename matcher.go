@@ -129,7 +129,7 @@ func DefaultCompare(expected, actual image.Image) error {
 	if err != nil {
 		return err
 	}
-	overlay, err := upload(difference(expected, actual))
+	overlay, err := upload(overlay(expected, actual))
 	if err != nil {
 		return err
 	}

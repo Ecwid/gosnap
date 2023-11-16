@@ -138,8 +138,7 @@ func (q Query) Compare() error {
 		}
 
 		// upload otherness image
-		other := difference(baseline.Value, q.target)
-		overlayKey, err = q.UploadSnapshot(xorHash, other)
+		overlayKey, err = q.UploadSnapshot(xorHash, overlay(baseline.Value, q.target))
 		if err != nil {
 			return err
 		}
