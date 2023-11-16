@@ -126,7 +126,7 @@ func (q Query) Compare() error {
 	)
 	if uploadOtherness {
 		// upload target image
-		targetKey, err = q.UploadSnapshot(targetHash, q.target)
+		targetKey, err = q.uploadSnapshot(targetHash, q.target)
 		if err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func (q Query) Compare() error {
 		}
 
 		// upload otherness image
-		overlayKey, err = q.UploadSnapshot(xorHash, overlay(baseline.Value, q.target))
+		overlayKey, err = q.uploadSnapshot(xorHash, overlay(baseline.Value, q.target))
 		if err != nil {
 			return err
 		}
@@ -171,7 +171,7 @@ func ApprovalsContains(approvals []Approval, hash Hash, distance int) []Approval
 	return []Approval{}
 }
 
-func (q Query) UploadSnapshot(hash Hash, image image.Image) (key string, err error) {
+func (q Query) uploadSnapshot(hash Hash, image image.Image) (key string, err error) {
 	key = q.matcher.generateKey()
 	err = q.pushSnapshot(key, hash, image)
 	return key, err

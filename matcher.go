@@ -95,13 +95,8 @@ func (m Matcher) generateKey() string {
 	return m.prependPathString() + uuid.NewString()
 }
 
-func upload(image image.Image, hash Hash) (string, error) {
-	key := uuid.NewString()
-	return key, Snapshot{
-		Value:    image,
-		Hash:     hash,
-		Metadata: map[string]string{},
-	}.Push(key)
+func Upload(image image.Image, hash Hash) (string, error) {
+	return Query{matcher: Matcher{}}.uploadSnapshot(hash, image)
 }
 
 func DefaultCompare(expected, actual image.Image) error {
@@ -117,15 +112,15 @@ func DefaultCompare(expected, actual image.Image) error {
 	if equal {
 		return nil
 	}
-	baseline, err := upload(expected, baselineHash)
+	baseline, err := Upload(expected, baselineHash)
 	if err != nil {
 		return err
 	}
-	target, err := upload(actual, targetHash)
+	target, err := Upload(actual, targetHash)
 	if err != nil {
 		return err
 	}
-	overlay, err := upload(overlay(expected, actual), xorHash)
+	overlay, err := Upload(overlay(expected, actual), xorHash)
 	if err != nil {
 		return err
 	}

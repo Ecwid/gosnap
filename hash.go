@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+var Zero = Hash{value: big.NewInt(0)}
+
 type Hash struct {
 	value *big.Int
 }
