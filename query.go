@@ -204,16 +204,5 @@ func (q Query) pushSnapshot(key string, hash Hash, image image.Image) (err error
 }
 
 func (q Query) CompareAndSaveForApproval() error {
-	compareError := q.Compare()
-	if err, ok := compareError.(Change); ok {
-		syncError := q.matcher.sync.Sync(func() error {
-			return addChanges(q.matcher.runID, err)
-		})
-		if syncError != nil {
-			return errors.Join(compareError, errors.New("can't add changes for approval"), syncError)
-		}
-		err.approveLabel = q.matcher.runID
-		return err
-	}
-	return compareError
+	return q.matcher.SaveChangeForApproval(q.Compare())
 }

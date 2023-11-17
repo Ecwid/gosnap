@@ -91,6 +91,20 @@ func (m Matcher) prependPathString() string {
 	return ""
 }
 
+func (m Matcher) SaveChangeForApproval(compareError error) error {
+	if err, ok := compareError.(Change); ok {
+		syncError := m.sync.Sync(func() error {
+			return addChanges(m.runID, err)
+		})
+		if syncError != nil {
+			return errors.Join(compareError, errors.New("can't add changes for approval"), syncError)
+		}
+		err.approveLabel = m.runID
+		return err
+	}
+	return compareError
+}
+
 func (m Matcher) generateKey() string {
 	return m.prependPathString() + uuid.NewString()
 }
