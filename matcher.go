@@ -86,7 +86,7 @@ func (m Matcher) SnapshotSource(args ...string) Matcher {
 
 func (m Matcher) prependPathString() string {
 	if len(m.path) > 0 {
-		return strings.Join(m.path, "/")
+		return strings.Join(m.path, "/") + "/"
 	}
 	return ""
 }
