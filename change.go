@@ -7,8 +7,8 @@ import (
 	"github.com/ecwid/gosnap/registry"
 )
 
-var KeyToApproveUrl = func(key string) string {
-	return defaultRegistry.Resolve(key)
+var KeyToApproveUrl = func(label, key string) string {
+	return defaultRegistry.Resolve(label + "/" + key)
 }
 
 type Change struct {
@@ -24,7 +24,7 @@ type Change struct {
 }
 
 func (e Change) GetApproveUrl() string {
-	return KeyToApproveUrl(e.approveLabel)
+	return KeyToApproveUrl(e.approveLabel, e.Key)
 }
 
 func (e Change) Error() string {
