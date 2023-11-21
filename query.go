@@ -119,39 +119,35 @@ func (q Query) Compare() error {
 		}
 	}
 
-	const uploadOtherness = true
-	var (
-		targetKey  string
-		overlayKey string
-	)
-	if uploadOtherness {
-		// upload target image
-		targetKey, err = q.uploadSnapshot(targetHash, q.target)
-		if err != nil {
-			return err
-		}
-
-		// no hash matches so we need download the baseline image to make diff between them
-		err = baseline.Pull(baselineKey)
-		if err != nil {
-			return err
-		}
-
-		// upload otherness image
-		overlayKey, err = q.uploadSnapshot(xorHash, overlay(baseline.Value, q.target))
-		if err != nil {
-			return err
-		}
-	}
-
 	return Change{
 		Key:        baselineKey,
 		XorHash:    xorHash,
 		TargetHash: targetHash,
 		Data:       q.data,
-		Target:     targetKey,
-		Overlay:    overlayKey,
 	}
+}
+
+func (q Query) UploadChange(change Change) error {
+	var err error
+	// upload target image
+	change.Target, err = q.uploadSnapshot(change.TargetHash, q.target)
+	if err != nil {
+		return errors.Join(err, change)
+	}
+
+	// no hash matches so we need download the baseline image to make diff between them
+	baseline := new(Snapshot)
+	err = baseline.Pull(change.Key)
+	if err != nil {
+		return errors.Join(err, change)
+	}
+
+	// upload otherness image
+	change.Overlay, err = q.uploadSnapshot(change.XorHash, overlay(baseline.Value, q.target))
+	if err != nil {
+		return errors.Join(err, change)
+	}
+	return change
 }
 
 func ApprovalsContains(approvals []Approval, hash Hash, distance int) []Approval {
@@ -204,5 +200,9 @@ func (q Query) pushSnapshot(key string, hash Hash, image image.Image) (err error
 }
 
 func (q Query) CompareAndSaveForApproval() error {
-	return q.matcher.SaveChangeForApproval(q.Compare())
+	compareError := q.Compare()
+	if e, ok := compareError.(Change); ok {
+		return q.matcher.SaveChangeForApproval(q.UploadChange(e))
+	}
+	return compareError
 }
