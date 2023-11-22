@@ -132,28 +132,34 @@ func (q Query) Match(target image.Image) error {
 	}
 }
 
-func (q Query) UploadChange(change Change) error {
+func (q Query) UploadChange(value error) error {
 	var err error
 
-	// upload target image
-	change.Target, err = q.uploadSnapshot(change.TargetHash, change.target)
-	if err != nil {
-		return errors.Join(err, change)
+	if change, ok := value.(Change); ok {
+		// upload target image
+		change.Target, err = q.uploadSnapshot(change.TargetHash, change.target)
+		if err != nil {
+			return errors.Join(err, change)
+		}
+
+		// no hash matches so we need download the baseline image to make diff between them
+		baseline := new(Snapshot)
+		err = baseline.Pull(change.Key)
+		if err != nil {
+			return errors.Join(err, change)
+		}
+
+		// upload diff overlay image
+		change.Overlay, err = q.uploadSnapshot(change.XorHash, overlay(baseline.Value, change.target))
+		if err != nil {
+			return errors.Join(err, change)
+		}
+
+		//
+		return q.matcher.addChangeForApproval(change)
 	}
 
-	// no hash matches so we need download the baseline image to make diff between them
-	baseline := new(Snapshot)
-	err = baseline.Pull(change.Key)
-	if err != nil {
-		return errors.Join(err, change)
-	}
-
-	// upload diff overlay image
-	change.Overlay, err = q.uploadSnapshot(change.XorHash, overlay(baseline.Value, change.target))
-	if err != nil {
-		return errors.Join(err, change)
-	}
-	return change
+	return value
 }
 
 func ApprovalsContains(approvals []Approval, hash Hash, distance int) []Approval {
@@ -207,9 +213,5 @@ func (q Query) pushSnapshot(key string, hash Hash, image image.Image) (err error
 
 // Compare match with baseline and upload target, overlay and approval report
 func (q Query) Compare(actual image.Image) error {
-	compareError := q.Match(actual)
-	if e, ok := compareError.(Change); ok {
-		return q.matcher.SaveChangeForApproval(q.UploadChange(e))
-	}
-	return compareError
+	return q.UploadChange(q.Match(actual))
 }
