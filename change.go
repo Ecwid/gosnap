@@ -3,6 +3,7 @@ package gosnap
 import (
 	"errors"
 	"fmt"
+	"image"
 
 	"github.com/ecwid/gosnap/registry"
 )
@@ -20,7 +21,8 @@ type Change struct {
 	Target     string            `json:"target"`
 	Overlay    string            `json:"overlay"`
 
-	approveLabel string `json:"-"`
+	target       image.Image `json:"-"`
+	approveLabel string      `json:"-"`
 }
 
 func (e Change) GetApproveUrl() string {

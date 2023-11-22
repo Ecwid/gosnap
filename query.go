@@ -21,32 +21,28 @@ type subImage interface {
 	SubImage(r image.Rectangle) image.Image
 }
 
+type mask struct {
+	Rect  image.Rectangle
+	Color color.Color
+}
+
 type Query struct {
 	matcher Matcher
 	key     string
-	target  image.Image
 	data    map[string]string
+	masks   []mask
 }
 
-func (f Matcher) New(actual image.Image) Query {
+func (f Matcher) New(snapshot string) Query {
 	return Query{
+		key:     snapshot,
 		matcher: f,
-		target:  actual,
 		data:    f.data,
 	}
 }
 
-func (q Query) Mask(rectangle image.Rectangle, color color.RGBA) Query {
-	q.target = Masked{
-		Image: q.target,
-		mask:  rectangle,
-		clr:   color,
-	}
-	return q
-}
-
-func (q Query) Snapshot(key string) Query {
-	q.key = key
+func (q Query) Mask(rectangle image.Rectangle, color color.Color) Query {
+	q.masks = append(q.masks, mask{Rect: rectangle, Color: color})
 	return q
 }
 
@@ -59,16 +55,16 @@ func (q Query) baselineKey() string {
 	return q.matcher.prependPathString() + q.key
 }
 
-func (q Query) makeTargetHash(x, y int) Hash {
+func (q Query) makeTargetHash(target image.Image, x, y int) Hash {
 	if q.matcher.normalize {
-		croppedTarget := q.target.(subImage).SubImage(image.Rect(0, 0, x, y))
+		croppedTarget := target.(subImage).SubImage(image.Rect(0, 0, x, y))
 		return MakeHash(croppedTarget, q.matcher.hashSize)
 	}
-	return MakeHash(q.target, q.matcher.hashSize)
+	return MakeHash(target, q.matcher.hashSize)
 }
 
-func (q Query) Compare() error {
-	if q.target == nil {
+func (q Query) Match(target image.Image) error {
+	if target == nil {
 		return errors.New("no target (actual) image set")
 	}
 	if q.key == "" {
@@ -76,6 +72,13 @@ func (q Query) Compare() error {
 	}
 	if q.matcher.approvalEnabled && q.matcher.approvalKey == "" {
 		return errors.New("approvalEnabled but approvalKey not defined")
+	}
+	for _, mask := range q.masks {
+		target = Masked{
+			Image: target,
+			Rect:  mask.Rect,
+			Color: mask.Color,
+		}
 	}
 
 	var (
@@ -89,15 +92,16 @@ func (q Query) Compare() error {
 
 	// force update baseline without matching and exit
 	if errors.Is(err, registry.ErrNoSuchKey) || q.matcher.forceUpdate {
-		hash := MakeHash(q.target, q.matcher.hashSize)
-		return q.uploadBaseline(baselineKey, hash, q.target)
+		hash := MakeHash(target, q.matcher.hashSize)
+		return q.uploadBaseline(baselineKey, hash, target)
 	}
 	if err != nil {
 		return err
 	}
 
 	// Comparing the baseline with target
-	targetHash := q.makeTargetHash(baseline.GetSize())
+	x, y := baseline.GetSize()
+	targetHash := q.makeTargetHash(target, x, y)
 
 	xorHash, equal := baseline.Hash.equal(targetHash, q.matcher.distance)
 	if equal {
@@ -105,7 +109,7 @@ func (q Query) Compare() error {
 	}
 	// update baseline and exit
 	if q.matcher.update {
-		return q.uploadBaseline(baselineKey, targetHash, q.target)
+		return q.uploadBaseline(baselineKey, targetHash, target)
 	}
 	// check if approved
 	if q.matcher.approvalEnabled {
@@ -124,13 +128,15 @@ func (q Query) Compare() error {
 		XorHash:    xorHash,
 		TargetHash: targetHash,
 		Data:       q.data,
+		target:     target,
 	}
 }
 
 func (q Query) UploadChange(change Change) error {
 	var err error
+
 	// upload target image
-	change.Target, err = q.uploadSnapshot(change.TargetHash, q.target)
+	change.Target, err = q.uploadSnapshot(change.TargetHash, change.target)
 	if err != nil {
 		return errors.Join(err, change)
 	}
@@ -142,8 +148,8 @@ func (q Query) UploadChange(change Change) error {
 		return errors.Join(err, change)
 	}
 
-	// upload otherness image
-	change.Overlay, err = q.uploadSnapshot(change.XorHash, overlay(baseline.Value, q.target))
+	// upload diff overlay image
+	change.Overlay, err = q.uploadSnapshot(change.XorHash, overlay(baseline.Value, change.target))
 	if err != nil {
 		return errors.Join(err, change)
 	}
@@ -199,8 +205,9 @@ func (q Query) pushSnapshot(key string, hash Hash, image image.Image) (err error
 	return err
 }
 
-func (q Query) CompareAndSaveForApproval() error {
-	compareError := q.Compare()
+// Compare match with baseline and upload target, overlay and approval report
+func (q Query) Compare(actual image.Image) error {
+	compareError := q.Match(actual)
 	if e, ok := compareError.(Change); ok {
 		return q.matcher.SaveChangeForApproval(q.UploadChange(e))
 	}

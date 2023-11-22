@@ -40,14 +40,14 @@ func grayToBigInt(img *image.Gray) *big.Int {
 
 type Masked struct {
 	image.Image
-	clr  color.RGBA
-	mask image.Rectangle
+	Color color.Color
+	Rect  image.Rectangle
 }
 
 func (t Masked) At(x, y int) color.Color {
-	if t.mask.Min.X <= x && x < t.mask.Max.X &&
-		t.mask.Min.Y <= y && y < t.mask.Max.Y {
-		return t.clr
+	if t.Rect.Min.X <= x && x < t.Rect.Max.X &&
+		t.Rect.Min.Y <= y && y < t.Rect.Max.Y {
+		return t.Color
 	}
 	return t.Image.At(x, y)
 }

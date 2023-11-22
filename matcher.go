@@ -68,6 +68,16 @@ func (m Matcher) ForceUpdate(enable bool) Matcher {
 	return m
 }
 
+func (m Matcher) HashSize(bits uint) Matcher {
+	m.hashSize = bits
+	return m
+}
+
+func (m Matcher) Delta(delta int) Matcher {
+	m.distance = delta
+	return m
+}
+
 func (m Matcher) ApprovalEnabled(enable bool, key string) Matcher {
 	m.approvalEnabled = enable
 	m.approvalKey = key
@@ -130,20 +140,11 @@ func DefaultCompare(expected, actual image.Image) error {
 	if err != nil {
 		return err
 	}
-	target, err := Upload(actual, targetHash)
-	if err != nil {
-		return err
-	}
-	overlay, err := Upload(overlay(expected, actual), xorHash)
-	if err != nil {
-		return err
-	}
 	return Change{
 		Key:        baseline,
 		XorHash:    xorHash,
 		TargetHash: targetHash,
-		Target:     target,
-		Overlay:    overlay,
+		target:     actual,
 	}
 }
 
