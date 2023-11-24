@@ -102,7 +102,7 @@ func (m Matcher) prependPathString() string {
 }
 
 func (m Matcher) addChangeForApproval(compareError error) error {
-	if err, ok := compareError.(Change); ok {
+	if err, ok := compareError.(Change); ok && m.approvalEnabled {
 		syncError := m.sync.Sync(func() error {
 			return addChanges(m.runID, err)
 		})
@@ -140,12 +140,12 @@ func DefaultCompare(expected, actual image.Image) error {
 	if err != nil {
 		return err
 	}
-	return Change{
+	return Query{matcher: Matcher{}}.UploadChange(Change{
 		Key:        baseline,
 		XorHash:    xorHash,
 		TargetHash: targetHash,
 		target:     actual,
-	}
+	})
 }
 
 type Synced struct {
