@@ -15,10 +15,6 @@ import (
 	"github.com/ecwid/gosnap/registry"
 )
 
-const (
-	snapshotMaxSize = 14000
-)
-
 type s3registry struct {
 	s3     *s3.S3
 	bucket string
