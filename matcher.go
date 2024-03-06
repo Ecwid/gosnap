@@ -102,7 +102,7 @@ func (m Matcher) prependPathString() string {
 }
 
 func (m Matcher) addChangeForApproval(compareError error) error {
-	if err, ok := compareError.(Change); ok && m.approvalEnabled {
+	if err, ok := compareError.(Change); ok {
 		syncError := m.sync.Sync(func() error {
 			return addChanges(m.runID, err)
 		})
