@@ -26,6 +26,7 @@ func getUnixTs() int64 {
 
 type Matcher struct {
 	runID           string
+	addChange       bool
 	approvalEnabled bool
 	update          bool
 	forceUpdate     bool
@@ -43,6 +44,7 @@ func NewMatcher(runID string) Matcher {
 		runID:           runID,
 		approvalKey:     "",
 		approvalEnabled: true,
+		addChange:       true,
 		update:          false,
 		forceUpdate:     false,
 		normalize:       false,
@@ -102,7 +104,7 @@ func (m Matcher) prependPathString() string {
 }
 
 func (m Matcher) addChangeForApproval(compareError error) error {
-	if err, ok := compareError.(Change); ok && m.approvalEnabled {
+	if err, ok := compareError.(Change); ok && m.addChange {
 		syncError := m.sync.Sync(func() error {
 			return addChanges(m.runID, err)
 		})
