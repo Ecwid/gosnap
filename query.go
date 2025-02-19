@@ -34,11 +34,15 @@ type Query struct {
 }
 
 func (f Matcher) New(snapshot string) Query {
-	return Query{
+	q := Query{
 		key:     snapshot,
 		matcher: f,
-		data:    f.data,
+		data:    map[string]string{},
 	}
+	for k, v := range f.data {
+		q.data[k] = v
+	}
+	return q
 }
 
 func (q Query) Mask(rectangle image.Rectangle, color color.Color) Query {
