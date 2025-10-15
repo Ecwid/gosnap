@@ -173,9 +173,12 @@ func ApprovalsContains(approvals []Approval, hash Hash, distance int) []Approval
 		}
 	}
 	/**/
+	hashBits := hash.value.Bits()
 	for _, tar1 := range approvals {
+		tarBits1 := tar1.Hash.value.Bits()
 		for _, tar2 := range approvals {
-			if hash.Equal(tar1.Hash.Or(tar2.Hash), distance) {
+			tarBits2 := tar2.Hash.value.Bits()
+			if OrDistanceFast(hashBits, tarBits1, tarBits2, distance) {
 				return []Approval{tar1, tar2}
 			}
 		}

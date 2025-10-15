@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"image/png"
 	"math/big"
+	"math/bits"
 
 	"golang.org/x/image/draw"
 )
@@ -105,4 +106,28 @@ func overlay(a, b image.Image) image.Image {
 		}
 	}
 	return img
+}
+
+// hash.Equal(or1.Hash.Or(or2.Hash), distance) but word-by-word and with an early exit
+func OrDistanceFast(hash, or1, or2 []big.Word, distance int) bool {
+	maxBits := max(len(hash), max(len(or1), len(or2)))
+	currentDistance := 0
+
+	for i := 0; i < maxBits; i++ {
+		var hashWord, orWord1, orWord2 big.Word
+		if i < len(hash) {
+			hashWord = hash[i]
+		}
+		if i < len(or1) {
+			orWord1 = or1[i]
+		}
+		if i < len(or2) {
+			orWord2 = or2[i]
+		}
+		currentDistance += bits.OnesCount(uint(hashWord) ^ (uint(orWord1) | uint(orWord2)))
+		if currentDistance > distance {
+			break
+		}
+	}
+	return currentDistance <= distance
 }
