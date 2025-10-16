@@ -100,3 +100,30 @@ func (h *Hash) SquareString(sq int) string {
 	}
 	return s.String()
 }
+
+// hash.Equal(others1.Hash.Or(others2.Hash), distance)
+func (h *Hash) EqualUnion(others []Hash, distance int) bool {
+	maxBits := len(h.value.Bits())
+	for i := range others {
+		if l := len(others[i].value.Bits()); l > maxBits {
+			maxBits = l
+		}
+	}
+	currentDistance := 0
+	for i := 0; i < maxBits; i++ {
+		var or, val big.Word
+		for j := 0; j < len(others); j++ {
+			if i < len(others[j].value.Bits()) {
+				or |= others[j].value.Bits()[i]
+			}
+		}
+		if i < len(h.value.Bits()) {
+			val = h.value.Bits()[i]
+		}
+		currentDistance += bits.OnesCount(uint(val) ^ uint(or))
+		if currentDistance > distance {
+			return false
+		}
+	}
+	return true
+}

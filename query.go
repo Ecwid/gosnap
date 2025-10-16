@@ -175,7 +175,7 @@ func ApprovalsContains(approvals []Approval, hash Hash, distance int) []Approval
 	/**/
 	for _, tar1 := range approvals {
 		for _, tar2 := range approvals {
-			if hash.Equal(tar1.Hash.Or(tar2.Hash), distance) {
+			if hash.EqualUnion([]Hash{tar1.Hash, tar2.Hash}, distance) {
 				return []Approval{tar1, tar2}
 			}
 		}
