@@ -111,13 +111,16 @@ func (h *Hash) EqualUnion(others []Hash, distance int) bool {
 	}
 	currentDistance := 0
 	for i := 0; i < maxBits; i++ {
-		var or big.Word
+		var or, val big.Word
 		for j := 0; j < len(others); j++ {
 			if i < len(others[j].value.Bits()) {
 				or |= others[j].value.Bits()[i]
 			}
 		}
-		currentDistance += bits.OnesCount(uint(h.value.Bits()[i]) ^ uint(or))
+		if i < len(h.value.Bits()) {
+			val = h.value.Bits()[i]
+		}
+		currentDistance += bits.OnesCount(uint(val) ^ uint(or))
 		if currentDistance > distance {
 			return false
 		}
