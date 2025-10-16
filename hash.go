@@ -105,8 +105,8 @@ func (h *Hash) SquareString(sq int) string {
 func (h *Hash) EqualUnion(others []Hash, distance int) bool {
 	maxBits := len(h.value.Bits())
 	for i := range others {
-		if len(others[i].value.Bits()) > maxBits {
-			maxBits = len(others[i].value.Bits())
+		if l := len(others[i].value.Bits()); l > maxBits {
+			maxBits = l
 		}
 	}
 	currentDistance := 0
