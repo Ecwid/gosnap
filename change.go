@@ -20,6 +20,7 @@ type Change struct {
 	Data       map[string]string `json:"data"`
 	Target     string            `json:"target"`
 	Overlay    string            `json:"overlay"`
+	Flaky      bool              `json:"flaky"`
 
 	target       image.Image `json:"-"`
 	approveLabel string      `json:"-"`
@@ -113,4 +114,17 @@ func deleteChanges(key string, changeKey *string) error {
 	}
 
 	return batch.Push(key)
+}
+
+func updateChanges(key string, changeKey string, update func(*Change)) error {
+	var batch = new(Batch)
+	err := batch.Pull(key)
+	if err != nil {
+		return err
+	}
+	if n := batch.findIndex(changeKey); n >= 0 {
+		update(&batch.Changes[n])
+		return batch.Push(key)
+	}
+	return nil
 }
