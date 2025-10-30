@@ -163,6 +163,13 @@ func (q Query) UploadChange(value error) error {
 		return q.matcher.addChangeForApproval(change)
 	}
 
+	if value == nil {
+		// mark any previous change as flaky
+		return q.matcher.updateChange(q.baselineKey(), func(c *Change) {
+			c.Flaky = true
+		})
+	}
+
 	return value
 }
 

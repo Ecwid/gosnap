@@ -103,6 +103,16 @@ func (m Matcher) prependPathString() string {
 	return ""
 }
 
+func (m Matcher) updateChange(key string, update func(*Change)) error {
+	syncError := m.sync.Sync(func() error {
+		return updateChanges(m.runID, key, update)
+	})
+	if syncError != nil {
+		return errors.Join(errors.New("can't update changes"), syncError)
+	}
+	return nil
+}
+
 func (m Matcher) addChangeForApproval(compareError error) error {
 	if err, ok := compareError.(Change); ok && m.addChange {
 		syncError := m.sync.Sync(func() error {
