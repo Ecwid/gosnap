@@ -119,7 +119,7 @@ func deleteChanges(key string, changeKey *string) error {
 func updateChanges(key string, changeKey string, update func(*Change)) error {
 	var batch = new(Batch)
 	err := batch.Pull(key)
-	if err != nil {
+	if err != nil && !errors.Is(err, registry.ErrNoSuchKey) {
 		return err
 	}
 	if n := batch.findIndex(changeKey); n >= 0 {
