@@ -217,9 +217,11 @@ func (s Synced) CopyLinkedSnapshot(src, dest string, metadata map[string]string)
 	if err := snapshot.Head(dest); err != nil {
 		return err
 	}
-	s.CopySnapshot(src, src, map[string]string{
+	if err := s.CopySnapshot(src, src, map[string]string{
 		"Previous": snapshot.Metadata["Current"],
-	})
+	}); err != nil {
+		return err
+	}
 	m := map[string]string{
 		"Current": dest,
 	}
