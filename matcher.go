@@ -212,16 +212,21 @@ func (s Synced) CopySnapshot(src, dest string, metadata map[string]string) error
 	})
 }
 
-func (s Synced) LinkSnapshot(src, dest string) error {
+func (s Synced) CopyLinkedSnapshot(src, dest string, metadata map[string]string) error {
 	var snapshot = new(Snapshot)
 	if err := snapshot.Head(dest); err != nil {
 		return err
 	}
 	s.CopySnapshot(src, src, map[string]string{
 		"Previous": snapshot.Metadata["Current"],
-		"Current":  src,
 	})
-	return nil
+	m := map[string]string{
+		"Current": dest,
+	}
+	for key, value := range metadata {
+		m[key] = value
+	}
+	return s.CopySnapshot(src, dest, m)
 }
 
 func (s Synced) DeleteChanges(key string, change *string) error {
