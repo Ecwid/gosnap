@@ -214,7 +214,7 @@ func (s Synced) CopySnapshot(src, dest string, metadata map[string]string) error
 
 func (s Synced) CopyLinkedSnapshot(src, dest string, metadata map[string]string) error {
 	var snapshot = new(Snapshot)
-	if err := snapshot.Head(dest); err != nil {
+	if err := snapshot.Head(dest); !errors.Is(err, registry.ErrNoSuchKey) {
 		return err
 	}
 	if err := s.CopySnapshot(src, src, map[string]string{
