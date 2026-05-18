@@ -196,15 +196,19 @@ func (q Query) uploadSnapshot(hash Hash, image image.Image) (key string, err err
 	return key, err
 }
 
-func (q Query) uploadBaseline(key string, newHash Hash, newImage image.Image) error {
-	if key == "" {
+func (q Query) uploadBaseline(newKey string, newHash Hash, newImage image.Image) error {
+	if newKey == "" {
 		return errors.New("can't update baseline snapshot due key is empty")
 	}
-	err := q.pushSnapshot(key, newHash, newImage)
+	key, err := q.uploadSnapshot(newHash, newImage)
 	if err != nil {
 		return err
 	}
-	return Published{Key: key}
+	err = q.matcher.sync.CopyLinkedSnapshot(key, newKey, nil)
+	if err != nil {
+		return err
+	}
+	return Published{Key: newKey}
 }
 
 func (q Query) pushSnapshot(key string, hash Hash, image image.Image) (err error) {
