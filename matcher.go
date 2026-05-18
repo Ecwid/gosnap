@@ -199,15 +199,36 @@ func (s Synced) Decline(key string, hash Hash) error {
 	})
 }
 
-func (s Synced) CopySnapshot(src, dest, author string) error {
+func (s Synced) CopySnapshot(src, dest string, metadata map[string]string) error {
 	return s.Sync(func() error {
 		var snapshot = new(Snapshot)
 		if err := snapshot.Pull(src); err != nil {
 			return err
 		}
-		snapshot.Metadata["author"] = author
+		for key, value := range metadata {
+			snapshot.Metadata[key] = value
+		}
 		return snapshot.Push(dest)
 	})
+}
+
+func (s Synced) CopyLinkedSnapshot(src, dest string, metadata map[string]string) error {
+	var snapshot = new(Snapshot)
+	if err := snapshot.Head(dest); err != nil {
+		return err
+	}
+	if err := s.CopySnapshot(src, src, map[string]string{
+		"Previous": snapshot.Metadata["Current"],
+	}); err != nil {
+		return err
+	}
+	m := map[string]string{
+		"Current": dest,
+	}
+	for key, value := range metadata {
+		m[key] = value
+	}
+	return s.CopySnapshot(src, dest, m)
 }
 
 func (s Synced) DeleteChanges(key string, change *string) error {
