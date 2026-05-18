@@ -223,7 +223,7 @@ func (s Synced) CopyLinkedSnapshot(src, dest string, metadata map[string]string)
 		return err
 	}
 	m := map[string]string{
-		"Current": dest,
+		"Current": src,
 	}
 	for key, value := range metadata {
 		m[key] = value
