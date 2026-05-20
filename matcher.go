@@ -214,19 +214,18 @@ func (s Synced) CopySnapshot(src, dest string, metadata map[string]string) error
 
 func (s Synced) CopyLinkedSnapshot(src, dest string, metadata map[string]string) error {
 	var snapshot = new(Snapshot)
-	if err := snapshot.Head(dest); !errors.Is(err, registry.ErrNoSuchKey) {
-		return err
-	}
-	if err := s.CopySnapshot(src, src, map[string]string{
-		"Previous": snapshot.Metadata["Current"],
-	}); err != nil {
+	if err := snapshot.Head(dest); err != nil && !errors.Is(err, registry.ErrNoSuchKey) {
 		return err
 	}
 	m := map[string]string{
-		"Current": src,
+		"Current":  src,
+		"Previous": snapshot.Metadata["Current"],
 	}
 	for key, value := range metadata {
 		m[key] = value
+	}
+	if err := s.CopySnapshot(src, src, m); err != nil {
+		return err
 	}
 	return s.CopySnapshot(src, dest, m)
 }
