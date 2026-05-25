@@ -201,14 +201,14 @@ func (s Synced) Decline(key string, hash Hash) error {
 
 func (s Synced) CopySnapshot(src, dest string, metadata map[string]string) error {
 	return s.Sync(func() error {
-		var snapshot = new(Snapshot)
-		if err := snapshot.Pull(src); err != nil {
+		obj, err := defaultRegistry.Pull(src)
+		if err != nil {
 			return err
 		}
 		for key, value := range metadata {
-			snapshot.Metadata[key] = value
+			obj.Data[key] = value
 		}
-		return snapshot.Push(dest)
+		return defaultRegistry.Push(dest, *obj)
 	})
 }
 
