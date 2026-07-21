@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -14,6 +16,12 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/ecwid/gosnap/registry"
 )
+
+const lastModifiedUnixKey = "last-modified-unix"
+
+func isLastModifiedUnixKey(key string) bool {
+	return strings.EqualFold(key, lastModifiedUnixKey)
+}
 
 type s3registry struct {
 	s3     *s3.S3
@@ -54,10 +62,10 @@ func (c s3registry) Head(key string) (map[string]string, error) {
 		return nil, noSuchKeyErr(err)
 	}
 	data := map[string]string{
-		"last-modified-unix": fmt.Sprint(head.LastModified.Unix()),
+		lastModifiedUnixKey: fmt.Sprint(head.LastModified.Unix()),
 	}
 	for key, value := range head.Metadata {
-		if value != nil {
+		if value != nil && !isLastModifiedUnixKey(key) {
 			data[key] = *value
 		}
 	}
@@ -79,10 +87,10 @@ func (c s3registry) Pull(key string) (*registry.Object, error) {
 	}
 	data.Body = buf.Bytes()
 	data.Data = map[string]string{
-		"last-modified-unix": fmt.Sprint(output.LastModified.Unix()),
+		lastModifiedUnixKey: fmt.Sprint(output.LastModified.Unix()),
 	}
 	for key, value := range output.Metadata {
-		if value != nil {
+		if value != nil && !isLastModifiedUnixKey(key) {
 			data.Data[key] = *value
 		}
 	}
@@ -102,9 +110,13 @@ func (c s3registry) Push(key string, object registry.Object) error {
 		req.SetContentLength(int64(len(object.Body)))
 	}
 	for k, v := range object.Data {
+		if isLastModifiedUnixKey(k) {
+			continue
+		}
 		value := v
 		req.Metadata[k] = &value
 	}
+	req.Metadata[lastModifiedUnixKey] = aws.String(fmt.Sprint(time.Now().Unix()))
 	_, err := c.s3.PutObject(req)
 	return err
 }
